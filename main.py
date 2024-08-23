@@ -1,362 +1,235 @@
-import os
-import re
-import json
 import flet as ft
-import yt_dlp
+from typing import Union
 
 
-class SaveSelectFile2(ft.Row):
-    def __init__(self, tipo, nome = None, json = None):
-        '''
-        tipo  == path: seleciona uma pasta (retorna o caminho completo da pasta selecionada)
-        tipo  == file: seleciona um arquivo (retorna o caminho completo do arquivo selecionado)
-        tipo  == save: sala um arquivo (retorna o caminho completo do arquivo, junto com seu nome)
-        
-        '''
+class Display(ft.Container):
+    def __init__(self,
+                 
+            data = None,
+            value = None,
+            opitions = None, #lista
+            height =40,
+            width = 120, 
+            bgcolor = 'black' ,
+            tipos_dados: Union[float, int, str] = [int, float],
+            borda_width = 4,
+            text_size = 25,
+            border_radius = 10,
+            func = None,
+            on_click = None,
+            text_color = None,
+            text_align = 'center', #Optional[TextAlign] = None,
+            horizontal_alignment = 'center' #CrossAxisAlignment
+        ): 
         super().__init__()
-        self.nome = nome
-        self.arquiv = self.ler_json(json, default={
-                    "pasta_donwloads": r'C:'
-                })        
-        self._diretorio = self.arquiv["pasta_donwloads"]        
-        self.pick_files_dialog = ft.FilePicker(on_result=self.pick_files_result)
-        self.tamanho_texto = 500
-        self.selected_files = ft.Text(width=self.tamanho_texto, selectable=True, max_lines = 1)
-        self._value = self.selected_files.value
-        self.tipo = tipo
+        self.opitions = opitions
+        self.func = func
+        self.on_click = on_click
+        self.data = data
+        if self.opitions is None:
+            self.opitions = [ft.PopupMenuItem(i, data = self.data, on_click = self.Clicou, padding = ft.Padding(0,0,0,0)) for i in range(30,250,1)]
+        else:
+            self.opitions = [ft.PopupMenuItem(i, data = self.data, on_click = self.Clicou, padding = ft.Padding(0,0,0,0)) for i in opitions]
 
-        def Selecionar_arquivo(_):
-            self.pick_files_dialog.pick_files(allow_multiple=True)
+        self.border_radius =border_radius
+        self.borda_width = borda_width
+        self.text_size = text_size
+        if borda_width > 0:
+            self.border = ft.border.all(self.borda_width, ft.colors.with_opacity(0.6,'blue'))
+        else:
+            self.border = None
+        self.data = data
+        self._value = value
+        self.bgcolor = bgcolor
+        self.height =height
+        self.width = width
+        self.padding = ft.Padding(0,0,0,0)
+        self._text_color = text_color
+        self.tipos_dados = tipos_dados
+        self.text_align = text_align
+        self.horizontal_alignment = horizontal_alignment
+        self._campotexto = ft.TextField(dense=True, on_submit=self.SetarValue)
+        self.on_long_press = self.VirarCampoTexto
 
-        def Selecionar_pasta(_):
-            self.pick_files_dialog.get_directory_path(dialog_title = 'askdjahs', initial_directory = self._diretorio)
+        self.content = ft.PopupMenuButton(
+            content=ft.Column([ft.Text(self._value, color = self._text_color, weight='BOLD', size=self.text_size, no_wrap = False,text_align = self.text_align  )], alignment='center', horizontal_alignment= self.horizontal_alignment),
+            items=self.opitions,
+            menu_position=ft.PopupMenuPosition.UNDER,
+        
+        )
 
-        def Save1(_):
-            self.pick_files_dialog.save_file()            
+    def SetarValue(self,e):
+        self._value = self._campotexto.value
+        self.content = ft.PopupMenuButton(
+            content=ft.Column([ft.Text(self._value, color = self._text_color, weight='BOLD', size=self.text_size, no_wrap = False,text_align = self.text_align  )], alignment='center', horizontal_alignment= self.horizontal_alignment),
+            items=self.opitions,
+            menu_position=ft.PopupMenuPosition.UNDER,
+        
+        )
+        if not self.func is None:
+            self.func(self._value)
+        if not self.on_click is None:
+            self.on_click(e)            
+        self.Atualizar() 
 
-
-
-        if tipo == 'file':
-            if self.nome == None:
-                self.nome = 'Selecione o arquivo'            
-            self.controls = [
-                ft.ElevatedButton(
-                    self.nome,
-                    icon=ft.icons.UPLOAD_FILE,
-                    on_click=Selecionar_arquivo,
-                ),
-                self.selected_files,
-            ]
-        elif tipo == 'path':
-            if self.nome == None:
-                self.nome = 'Selecione a pasta'
-            self.controls = [
-                ft.ElevatedButton(
-                    self.nome,
-                    icon=ft.icons.FOLDER,
-                    on_click=Selecionar_pasta,
-                ),
-                self.selected_files,
-            ]   
-        elif tipo == 'save':
-            if self.nome == None:
-                self.nome = 'Digite o nome do arquivo'            
-            self.controls = [
-                ft.ElevatedButton(
-                    self.nome,
-                    icon=ft.icons.SAVE,
-                    on_click=Save1,
-                ),
-                self.selected_files,
-
-            ]                      
-
-    def pick_files_result(self, e: ft.FilePickerResultEvent):
-        if self.tipo == 'file':
-            self.selected_files.value = (
-                ",".join(map(lambda f: f.path, e.files)) if e.files else "Cancelled!"
-            )
-        elif self.tipo == 'path':
-            self.selected_files.value = e.path if e.path else "Cancelled!"
-
-        elif self.tipo == 'save':
-            self.selected_files.value = e.path if e.path else "Cancelled!"            
-            
-
-        self.selected_files.update()
-        self._value = self.selected_files.value
+    def VirarCampoTexto(self,e):
+        content_antigo = self.content
+        self.content = self._campotexto
+        if not self.on_click is None:
+            self.on_click(e)  
+        self.Atualizar()
 
 
-    # happens when example is added to the page (when user chooses the FilePicker control from the grid)
-    def did_mount(self):
-        self.page.overlay.append(self.pick_files_dialog)
-        self.page.update()
+    def Clicou(self,e):
+        if type(e.control.text) in [int, float]:
+            valor = round(e.control.text,1)
+        else:
+           valor = e.control.text 
+        self.content.content.controls[0].value = valor
+        self._value = valor
+        if not self.func is None:
+            self.func(valor)
+        if not self.on_click is None:
+            self.on_click(e)            
+        self.Atualizar()
 
-    # happens when example is removed from the page (when user chooses different control group on the navigation rail)
-    def will_unmount(self):
-        self.page.overlay.remove(self.pick_files_dialog)
-        self.page.update()
 
-    def escrever_json(self, data, filename):
-        if not filename.endswith('.json'):
-            filename += '.json'
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=4)
 
-    def ler_json(self, filename, default=None):
-        if not filename.endswith('.json'):
-            filename += '.json'
+    def Atualizar(self):
         try:
-            with open(filename, 'r') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            try:
-                self.escrever_json(default, filename)
-            except:
-                pass
-            return default or {}
-
-
+            self.update()
+        except:
+            pass
 
     @property
     def value(self):
-        return self._value
+        try:
+            v = int(self._value)
+        except:
+            try:
+                v = float(self._value)
+            except:            
+                v = self._value
+        return v
+
     @value.setter
     def value(self, valor):
-        self._value = valor
-        self.selected_files.value = valor
-        # self.selected_files.update()
+        if isinstance(self.content, ft.PopupMenuButton):
+            if type(valor in self.tipos_dados):
+                self._value = valor
+                self.content.items.append(ft.PopupMenuItem(valor, on_click = self.Clicou))
+                self.content.content.controls[0].value = valor
+                self.Atualizar()
+            else:
+                print('número inválido')
+        elif isinstance(self.content, ft.TextField):
+            if type(valor in self.tipos_dados):
+                self._value = valor
+                self.content.value = valor
+                self.Atualizar()
+            else:
+                print('número inválido')
 
-class BaixarDoYoutube:
-    def __init__(self,output):
-        self.converter_para_mp3 = False
-        self.output = output
-        self.arquiv = self.ler_json('config_baixar_youtube', default={
-                    "pasta_donwloads": r'D:\baixados\tjse\mandados\2014'
-                })        
-        self._diretorio = self.arquiv["pasta_donwloads"]
-        self.nomes = []
-        self.bitrate = '320'
-        self.ffmpeg_path = r'D:\baixados\programas_python\ffmpeg-2024-07-10-git-1a86a7a48d-essentials_build\ffmpeg-2024-07-10-git-1a86a7a48d-essentials_build\bin'  # Altere para o caminho correto do seu ffmpeg
-         # Opções de download
-        self.ydl_opts = {
-            'format': 'bestaudio/best',  # Seleciona o melhor formato de áudio
-            'outtmpl': os.path.join(self._diretorio, '%(title)s.%(ext)s'),  # Nome do arquivo de saída
-
-            'ffmpeg_location': self.ffmpeg_path,  # Especifica o caminho para o ffmpeg
-        }
-
-
-
-    def remove_invalid_characters(self, filename):
-        forbidden_characters = ['\\', '/', ':', '*', '?', '¿','[', ']', '{', '}' '"', '<', '>', '|', ')', '(','|' ]
-        clean_filenames = []
-        for character in forbidden_characters:
-            filename = filename.replace(character, '')
-        return filename
-
-
-    # def Convert_to_mp32(self, stem):
-    #     if stem.mime_type in ["audio/mp4"]:
-    #         nome = stem.title +'.mp4'
-    #         audio = AudioSegment.from_file(nome, format="mp4")
-
-
-    #     elif stem.mime_type in ["audio/webm"]:
-    #         nome = stem.title +'.webm'
-    #         audio = AudioSegment.from_file(nome, format="webm")
-
-    #     saida = stem.title +'.mp3'
-    #     audio.export(saida, format="mp3")
-    #     self.output(f"'{saida}' convertido com sucesso")
-
-
-    # def Convert_to_mp3(self):
-    #     self.output(f"convertendo para mp3....")
-
-    #     audio = AudioSegment.from_file(self.nome_save, format= self.extencao[1:])
-    #     saida = self.nome +'.mp3'
-    #     saida = os.path.join(self._diretorio, saida)
-
-    #     audio.export(saida, format="mp3", bitrate = self.bitrate)
-    #     self.output(f"'{saida}' convertido para mp3 com sucesso\n")
-    #     os.remove(self.nome_save) #deletar o arquivo não convertido
-                
-
-    def Download(self, url):
-        if self.converter_para_mp3:
-            self.ydl_opts['postprocessors'] = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',  # Formato de saída (por exemplo, mp3)
-                'preferredquality': self.bitrate,  # Qualidade do áudio
-            }]
-        else:
-            self.ydl_opts['postprocessors'] = []
-
-        def progress_hook(d):
-            if d['status'] == 'finished':
-                self.title = d['info_dict']['title']
-
-        self.ydl_opts['progress_hooks'] = [progress_hook]
-
-        with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
-            ydl.download([url])
-
-        self.output(f' "{self.title}" foi baixado com sucesso para a pasta {self._diretorio} ')
-        
-                
-
-
-    def BaixarAudio(self, url):
-        self.Download(url)
-    
-
-    def Baixar(self, link):
-        self.output(f"Iniciando donwload dos arquivos...")
-
-        self.BaixarAudio(link)
-
-    def escrever_json(self, data, filename):
-        if not filename.endswith('.json'):
-            filename += '.json'
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=4)
-
-    def ler_json(self, filename, default=None):
-        if not filename.endswith('.json'):
-            filename += '.json'
-        try:
-            with open(filename, 'r') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            try:
-                self.escrever_json(default, filename)
-            except:
-                pass
-            return default or {}
 
     @property
-    def diretorio(self):
-        return self._diretorio
-    @diretorio.setter
-    def diretorio(self,valor):
-        if valor not in ['', None]:
-            self._diretorio = valor
-            self.arquiv["pasta_donwloads"] = valor
-            self.escrever_json(self.arquiv, 'config_baixar_youtube')
+    def text_color(self):
+        return self._text_color
+
+    @text_color.setter
+    def text_color(self, cor):
+        self._text_color = cor  
+        colors = {
+            '16': 'red',
+            '15': '#ff9900',
+            '14': '#ffd966',
+            '13': '#93c47d',
+            '12': '#ea9999',
+            '11': '#ffff00',
+            '10': '#d9ead3',
+            '9': '#c9daf8',
+            '8': '#d9d9d9',
+        }        
+
+        self.content = ft.PopupMenuButton(
+            content=ft.Column([ft.Text(self._value, color = self._text_color, weight='BOLD', size=self.text_size, no_wrap = False,text_align = 'center' )], alignment='center', horizontal_alignment='center'),
+            items=self.opitions,
+            menu_position=ft.PopupMenuPosition.UNDER,        
+        )
+         
+        self.Atualizar()
 
 
-# if __name__ == '__main__':
-#     link = 'https://www.youtube.com/watch?v=YyFd_dXy494&list=PLuo-Za1ITtoSDxMC0AQLfUDSztk06RsE6&ab_channel=AlineBarrosVEVO'
-#     downloader = BaixarDoYoutube()
-#     downloader.baixar(link)
+class My_tabelaC(ft.Column):
+    def __init__(self, dic# dicionário
+                    ):
+        super().__init__()
+        self.spacing = 0
+        self.run_spacing = 0
+        self._dic = dic          
+        self.Linhas()
+
+
+
+
+    def Colunas(self):
+        self.chaves = list(self._dic.keys())
+        self.larguras = {i:60 for i in self.chaves}
+        self.opcoes = self._dic[self.chaves[0]]
+        self.controls = [ft.Container(ft.Row([ft.Text(i, width=self.larguras[i], text_align='center') for i in self.chaves], tight=True),bgcolor='white,0.3')]
+
+            
+    def Linhas(self):
+        self.Colunas()
+        for i, k in enumerate(self._dic[self.chaves[0]]):     
+            cor  = 'black' if i%2 == 0 else  'white,0.1'  
+            self.controls.append(
+                ft.Container(ft.Row([
+                                Display(value = self._dic[self.chaves[0]][i],opitions=self.opcoes, width=self.larguras[self.chaves[0]],height=20,text_size = 12, 
+                                        borda_width = 0,border_radius = 0, 
+                                                text_align= ft.TextAlign.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, bgcolor = 'white,0')
+                ]+[ft.Text(self._dic[j][i],width=self.larguras[j], text_align='center') for j in self.chaves[1:]], tight=True),bgcolor=cor)
+                
+                )
+            
+    @property
+    def dic(self):
+        return self._dic
+    
+    @dic.setter
+    def dic(self, dic):
+        if isinstance(dic, dict):
+            self._dic = dic
+            self.Linhas()
+        self.update()
+
+
 
 
 def main(page: ft.Page):
-    page.window_width = 300  # Define a largura da janela como 800 pixels
-    page.window_height = 300  # 
-    bgcolor = 'white'
-    cor_texto = 'black'
+    # page.title = "Guerra de Clans"
+    # page.window.width = 500  # Define a largura da janela como 800 pixels
+    # page.window.height = 770  #    
+    page.theme_mode = ft.ThemeMode.DARK
 
-    page.theme = ft.Theme(
-        color_scheme_seed = 'white',
-        color_scheme = ft.ColorScheme(background = 'white'),
-        primary_color = 'red',
-        primary_color_dark = 'red',
-        primary_text_theme = ft.TextStyle(color = cor_texto),
-        dialog_theme = ft.DialogTheme(
-            bgcolor = bgcolor,
-            title_text_style = ft.TextStyle(color = cor_texto),
-            content_text_style = ft.TextStyle(color = cor_texto),
-            alignment = ft.Alignment(0, 0),
-            actions_padding = 2,
+
+    dic = {'Jogador':list(range(15)), 'Vila':list(range(15)), 'Estrelas': list(range(15))}
+    dic2 = {'Jogador':list(range(10)), 'Vila':list(range(10)), 'Estrelas': list(range(10))}
+    def mudar(e):
+        e.control.data = not e.control.data
+        if e.control.data:
+            tabela.dic = dic
+        else:
+            tabela.dic = dic2
+    bt = ft.TextButton('mudar', on_click=mudar, data = True)
+
+    tabela = My_tabelaC(dic)
+
+    page.add(bt,tabela)
+
+
+if __name__ == '__main__':  
+    
+    ft.app(main,
+    #    view = ft.AppView.WEB_BROWSER
+    # port = 8050
        )
-        
-    )
-
-    COR1 = 'white,0.5'
-    COR2 = 'black'
-    COR3 = 'white'
-    page.bgcolor = '#282a36'
-    page.title = "Baixar vídeos do Youtube"
-    # page.theme_mode = ft.ThemeMode.DARK
-    # page.vertical_alignment = ft.MainAxisAlignment.CENTER
-
-    def escrever_json(data, filename):
-        if not filename.endswith('.json'):
-            filename += '.json'
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=4)
-
-    def ler_json( filename, default=None):
-        if not filename.endswith('.json'):
-            filename += '.json'
-        try:
-            with open(filename, 'r') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            try:
-                escrever_json(default, filename)
-            except:
-                pass
-            return default or {}    
-
-    def Get_links(e):
-        url_pattern = r'https?://[^\s]+'
-        url_field.value = re.findall(url_pattern, e.control.value)
-        
-
-    arquiv = ler_json('config_baixar_youtube', default={
-                "pasta_donwloads": r'C:',
-                "state_select":True
-            })        
-    state_select =  arquiv["state_select"]         
-        
-    def Chenge_select(e):
-        arquiv["state_select"]  = e.control.value
-        escrever_json(arquiv, 'config_baixar_youtube')
-
-    url_field = ft.TextField(label = 'url',hint_text="Insira a URL do vídeo aqui", on_change=Get_links) #, border_color = 'white,0.8'
-    download_button = ft.ElevatedButton("Baixar", on_click=lambda e: baixar_video(url_field.value))
-    select_button = SaveSelectFile2('path', json='config_baixar_youtube')
-    mp3 = ft.Checkbox(label = 'Converter para mp3?', value = state_select, on_change=Chenge_select, )
-    output = ft.Text("")
-
-
-
-
-    def Output(texto):
-       output.value += f'{texto}\n'
-       page.update()
-
-
-    def baixar_video(url):
-        # Aqui você pode chamar a função de download de vídeo
-        downloader = BaixarDoYoutube(Output)
-        downloader.diretorio = select_button.value
-        downloader.converter_para_mp3 = mp3.value
-        # print(downloader.diretorio)
-        if isinstance(url, list):
-            for i in url:
-                if i not in ['', None]:
-                    downloader.Baixar(i)
-
-
-    page.add(
-        ft.Column(
-            [
-                # ft.Text("Baixar vídeos do Youtube", style=ft.TextStyle(size=24)),
-                url_field,
-                select_button,                
-                ft.Row([download_button]),
-                ft.Container(ft.Column([output],auto_scroll = True, scroll=ft.ScrollMode.ADAPTIVE, height=90, width=page.window_height),bgcolor=f'red,0.1')
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-        )
-    )
-
-ft.app(main, 
-
-# view=ft.AppView.WEB_BROWSER
-
-)
